@@ -37,7 +37,7 @@ async def get_main_menu(user_id: int) -> InlineKeyboardMarkup:
             InlineKeyboardButton("💰 Balance", callback_data="balance")
         ],
         [
-            InlineKeyboardButton("🏆 Leaderboard", callback_data="leaderboard"),
+            InlineKeyboardButton("🏆 Leaderboard", callback_data="top"),
             InlineKeyboardButton("⚙️ Settings", callback_data="settings")
         ]
     ]
