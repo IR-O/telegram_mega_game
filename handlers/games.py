@@ -42,6 +42,9 @@ class GamesHandler:
         """Handle /mafia command"""
         user = update.effective_user
         
+        if not user:
+            return
+        
         # Get or create mafia player data
         mafia_data = await db.find_one('mafia_players', {'user_id': user.id})
         if not mafia_data:
@@ -94,16 +97,38 @@ Wanted: {'⭐' * mafia_data.get('wanted_level', 0)}
 **Gang:** {mafia_data.get('gang', 'None')}
         """
         
-        await update.message.reply_text(
-            mafia_text,
-            parse_mode='Markdown',
-            reply_markup=await get_game_keyboard('mafia', user.id)
-        )
+        keyboard = await get_game_keyboard('mafia', user.id)
+        
+        # Check if this is a callback or a command
+        if update.callback_query and update.callback_query.message:
+            try:
+                await update.callback_query.edit_message_text(
+                    mafia_text,
+                    parse_mode='Markdown',
+                    reply_markup=keyboard
+                )
+            except Exception as e:
+                logger.error(f"Error editing message in mafia command: {e}")
+                # Fallback to sending new message
+                if update.effective_message:
+                    await update.effective_message.reply_text(
+                        mafia_text,
+                        parse_mode='Markdown',
+                        reply_markup=keyboard
+                    )
+        elif update.effective_message:
+            await update.effective_message.reply_text(
+                mafia_text,
+                parse_mode='Markdown',
+                reply_markup=keyboard
+            )
     
     @staticmethod
     async def space_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /space command"""
         user = update.effective_user
+        if not user:
+            return
         
         space_text = """
 🌌 **SPACE EMPIRE**
@@ -127,12 +152,26 @@ Wanted: {'⭐' * mafia_data.get('wanted_level', 0)}
         """
         
         keyboard = await get_game_keyboard('space', user.id)
-        await update.message.reply_text(space_text, reply_markup=keyboard)
+        
+        if update.callback_query and update.callback_query.message:
+            try:
+                await update.callback_query.edit_message_text(
+                    space_text,
+                    reply_markup=keyboard
+                )
+            except Exception as e:
+                logger.error(f"Error editing message in space command: {e}")
+                if update.effective_message:
+                    await update.effective_message.reply_text(space_text, reply_markup=keyboard)
+        elif update.effective_message:
+            await update.effective_message.reply_text(space_text, reply_markup=keyboard)
     
     @staticmethod
     async def zombies_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /zombies command"""
         user = update.effective_user
+        if not user:
+            return
         
         zombies_text = """
 🧟 **ZOMBIE APOCALYPSE**
@@ -156,12 +195,26 @@ Wanted: {'⭐' * mafia_data.get('wanted_level', 0)}
         """
         
         keyboard = await get_game_keyboard('zombies', user.id)
-        await update.message.reply_text(zombies_text, reply_markup=keyboard)
+        
+        if update.callback_query and update.callback_query.message:
+            try:
+                await update.callback_query.edit_message_text(
+                    zombies_text,
+                    reply_markup=keyboard
+                )
+            except Exception as e:
+                logger.error(f"Error editing message in zombies command: {e}")
+                if update.effective_message:
+                    await update.effective_message.reply_text(zombies_text, reply_markup=keyboard)
+        elif update.effective_message:
+            await update.effective_message.reply_text(zombies_text, reply_markup=keyboard)
     
     @staticmethod
     async def pirates_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /pirates command"""
         user = update.effective_user
+        if not user:
+            return
         
         pirates_text = """
 🏴‍☠️ **PIRATE EMPIRE**
@@ -185,11 +238,27 @@ Wanted: {'⭐' * mafia_data.get('wanted_level', 0)}
         """
         
         keyboard = await get_game_keyboard('pirates', user.id)
-        await update.message.reply_text(pirates_text, reply_markup=keyboard)
+        
+        if update.callback_query and update.callback_query.message:
+            try:
+                await update.callback_query.edit_message_text(
+                    pirates_text,
+                    reply_markup=keyboard
+                )
+            except Exception as e:
+                logger.error(f"Error editing message in pirates command: {e}")
+                if update.effective_message:
+                    await update.effective_message.reply_text(pirates_text, reply_markup=keyboard)
+        elif update.effective_message:
+            await update.effective_message.reply_text(pirates_text, reply_markup=keyboard)
     
     @staticmethod
     async def mutation_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /mutation command"""
+        user = update.effective_user
+        if not user:
+            return
+        
         mutation_text = """
 🧪 **MUTATION LAB**
 ━━━━━━━━━━━━━━━━━━━━━
@@ -223,11 +292,26 @@ Epic Mutation: 5 DNA
             [InlineKeyboardButton("🔙 Back to Menu", callback_data="main_menu")]
         ])
         
-        await update.message.reply_text(mutation_text, reply_markup=keyboard)
+        if update.callback_query and update.callback_query.message:
+            try:
+                await update.callback_query.edit_message_text(
+                    mutation_text,
+                    reply_markup=keyboard
+                )
+            except Exception as e:
+                logger.error(f"Error editing message in mutation command: {e}")
+                if update.effective_message:
+                    await update.effective_message.reply_text(mutation_text, reply_markup=keyboard)
+        elif update.effective_message:
+            await update.effective_message.reply_text(mutation_text, reply_markup=keyboard)
     
     @staticmethod
     async def haunted_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /haunted command"""
+        user = update.effective_user
+        if not user:
+            return
+        
         haunted_text = """
 👻 **HAUNTED TELEGRAM**
 ━━━━━━━━━━━━━━━━━━━━━
@@ -262,11 +346,26 @@ Epic Mutation: 5 DNA
             [InlineKeyboardButton("🔙 Back to Menu", callback_data="main_menu")]
         ])
         
-        await update.message.reply_text(haunted_text, reply_markup=keyboard)
+        if update.callback_query and update.callback_query.message:
+            try:
+                await update.callback_query.edit_message_text(
+                    haunted_text,
+                    reply_markup=keyboard
+                )
+            except Exception as e:
+                logger.error(f"Error editing message in haunted command: {e}")
+                if update.effective_message:
+                    await update.effective_message.reply_text(haunted_text, reply_markup=keyboard)
+        elif update.effective_message:
+            await update.effective_message.reply_text(haunted_text, reply_markup=keyboard)
     
     @staticmethod
     async def mind_wars_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /mindwars command"""
+        user = update.effective_user
+        if not user:
+            return
+        
         mindwars_text = """
 🧠 **MIND WARS**
 ━━━━━━━━━━━━━━━━━━━━━
@@ -312,11 +411,26 @@ Rating: 1000
             [InlineKeyboardButton("🔙 Back to Menu", callback_data="main_menu")]
         ])
         
-        await update.message.reply_text(mindwars_text, reply_markup=keyboard)
+        if update.callback_query and update.callback_query.message:
+            try:
+                await update.callback_query.edit_message_text(
+                    mindwars_text,
+                    reply_markup=keyboard
+                )
+            except Exception as e:
+                logger.error(f"Error editing message in mind wars command: {e}")
+                if update.effective_message:
+                    await update.effective_message.reply_text(mindwars_text, reply_markup=keyboard)
+        elif update.effective_message:
+            await update.effective_message.reply_text(mindwars_text, reply_markup=keyboard)
     
     @staticmethod
     async def city_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /city command"""
+        user = update.effective_user
+        if not user:
+            return
+        
         city_text = """
 🏙️ **BUILD YOUR CITY**
 ━━━━━━━━━━━━━━━━━━━━━
@@ -355,11 +469,26 @@ Rating: 1000
             [InlineKeyboardButton("🔙 Back to Menu", callback_data="main_menu")]
         ])
         
-        await update.message.reply_text(city_text, reply_markup=keyboard)
+        if update.callback_query and update.callback_query.message:
+            try:
+                await update.callback_query.edit_message_text(
+                    city_text,
+                    reply_markup=keyboard
+                )
+            except Exception as e:
+                logger.error(f"Error editing message in city command: {e}")
+                if update.effective_message:
+                    await update.effective_message.reply_text(city_text, reply_markup=keyboard)
+        elif update.effective_message:
+            await update.effective_message.reply_text(city_text, reply_markup=keyboard)
     
     @staticmethod
     async def spy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /spy command"""
+        user = update.effective_user
+        if not user:
+            return
+        
         spy_text = """
 🕵️ **SPY NETWORK**
 ━━━━━━━━━━━━━━━━━━━━━
@@ -393,11 +522,26 @@ Rating: 1000
             [InlineKeyboardButton("🔙 Back to Menu", callback_data="main_menu")]
         ])
         
-        await update.message.reply_text(spy_text, reply_markup=keyboard)
+        if update.callback_query and update.callback_query.message:
+            try:
+                await update.callback_query.edit_message_text(
+                    spy_text,
+                    reply_markup=keyboard
+                )
+            except Exception as e:
+                logger.error(f"Error editing message in spy command: {e}")
+                if update.effective_message:
+                    await update.effective_message.reply_text(spy_text, reply_markup=keyboard)
+        elif update.effective_message:
+            await update.effective_message.reply_text(spy_text, reply_markup=keyboard)
     
     @staticmethod
     async def dragons_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /dragons command"""
+        user = update.effective_user
+        if not user:
+            return
+        
         dragons_text = """
 🐉 **DRAGON KINGDOM**
 ━━━━━━━━━━━━━━━━━━━━━
@@ -440,11 +584,26 @@ Rating: 1000
             [InlineKeyboardButton("🔙 Back to Menu", callback_data="main_menu")]
         ])
         
-        await update.message.reply_text(dragons_text, reply_markup=keyboard)
+        if update.callback_query and update.callback_query.message:
+            try:
+                await update.callback_query.edit_message_text(
+                    dragons_text,
+                    reply_markup=keyboard
+                )
+            except Exception as e:
+                logger.error(f"Error editing message in dragons command: {e}")
+                if update.effective_message:
+                    await update.effective_message.reply_text(dragons_text, reply_markup=keyboard)
+        elif update.effective_message:
+            await update.effective_message.reply_text(dragons_text, reply_markup=keyboard)
     
     @staticmethod
     async def cards_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /cards command"""
+        user = update.effective_user
+        if not user:
+            return
+        
         cards_text = """
 🎴 **COLLECTIBLE CARD BATTLE**
 ━━━━━━━━━━━━━━━━━━━━━
@@ -487,11 +646,26 @@ Rating: 1000
             [InlineKeyboardButton("🔙 Back to Menu", callback_data="main_menu")]
         ])
         
-        await update.message.reply_text(cards_text, reply_markup=keyboard)
+        if update.callback_query and update.callback_query.message:
+            try:
+                await update.callback_query.edit_message_text(
+                    cards_text,
+                    reply_markup=keyboard
+                )
+            except Exception as e:
+                logger.error(f"Error editing message in cards command: {e}")
+                if update.effective_message:
+                    await update.effective_message.reply_text(cards_text, reply_markup=keyboard)
+        elif update.effective_message:
+            await update.effective_message.reply_text(cards_text, reply_markup=keyboard)
     
     @staticmethod
     async def detective_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /detective command"""
+        user = update.effective_user
+        if not user:
+            return
+        
         detective_text = """
 🔎 **CRIME DETECTIVE**
 ━━━━━━━━━━━━━━━━━━━━━
@@ -526,11 +700,26 @@ Rating: 1000
             [InlineKeyboardButton("🔙 Back to Menu", callback_data="main_menu")]
         ])
         
-        await update.message.reply_text(detective_text, reply_markup=keyboard)
+        if update.callback_query and update.callback_query.message:
+            try:
+                await update.callback_query.edit_message_text(
+                    detective_text,
+                    reply_markup=keyboard
+                )
+            except Exception as e:
+                logger.error(f"Error editing message in detective command: {e}")
+                if update.effective_message:
+                    await update.effective_message.reply_text(detective_text, reply_markup=keyboard)
+        elif update.effective_message:
+            await update.effective_message.reply_text(detective_text, reply_markup=keyboard)
     
     @staticmethod
     async def racing_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /racing command"""
+        user = update.effective_user
+        if not user:
+            return
+        
         racing_text = """
 🏎️ **STREET RACING EMPIRE**
 ━━━━━━━━━━━━━━━━━━━━━
@@ -571,7 +760,18 @@ Durability: 0
             [InlineKeyboardButton("🔙 Back to Menu", callback_data="main_menu")]
         ])
         
-        await update.message.reply_text(racing_text, reply_markup=keyboard)
+        if update.callback_query and update.callback_query.message:
+            try:
+                await update.callback_query.edit_message_text(
+                    racing_text,
+                    reply_markup=keyboard
+                )
+            except Exception as e:
+                logger.error(f"Error editing message in racing command: {e}")
+                if update.effective_message:
+                    await update.effective_message.reply_text(racing_text, reply_markup=keyboard)
+        elif update.effective_message:
+            await update.effective_message.reply_text(racing_text, reply_markup=keyboard)
     
     @staticmethod
     async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -638,14 +838,7 @@ Durability: 0
             
             if game_name in game_handlers:
                 try:
-                    # Create a new message for the game
-                    await query.edit_message_text(
-                        f"🎮 Loading {game_name.title()}...",
-                        reply_markup=InlineKeyboardMarkup([
-                            [InlineKeyboardButton("⏳ Loading...", callback_data="dummy")]
-                        ])
-                    )
-                    # Send the game content as a new message
+                    # Pass the update directly to the game handler
                     await game_handlers[game_name](update, context)
                 except Exception as e:
                     logger.error(f"Error loading game {game_name}: {e}")
