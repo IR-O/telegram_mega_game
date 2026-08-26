@@ -1,19 +1,25 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from database.mongodb import db
-from locales.translations import get_translation, SUPPORTED_LANGUAGES
+from locales.translations import SUPPORTED_LANGUAGES
 
 class SettingsHandler:
+    @staticmethod
+    def escape_markdown(text: str) -> str:
+        """Escape special characters for Markdown"""
+        special_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
+        for char in special_chars:
+            text = text.replace(char, f'\\{char}')
+        return text
+
     @staticmethod
     async def language_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /language command"""
         user = update.effective_user
         
-        # Get current language
         user_data = await db.find_one('users', {'telegram_id': user.id})
         current_lang = user_data.get('language', 'en') if user_data else 'en'
         
-        # Create language keyboard
         keyboard = []
         row = []
         for code, name in SUPPORTED_LANGUAGES.items():
@@ -40,11 +46,18 @@ class SettingsHandler:
         
         keyboard.append([InlineKeyboardButton("🔙 Back to Menu", callback_data="main_menu")])
         
-        await update.message.reply_text(
-            f"🌐 **Select Language**\n\nCurrent: {SUPPORTED_LANGUAGES.get(current_lang, 'English')}",
-            parse_mode='Markdown',
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
+        text = f"🌐 **Select Language**\n\nCurrent: {SUPPORTED_LANGUAGES.get(current_lang, 'English')}"
+        
+        if update.message:
+            try:
+                await update.message.reply_text(text, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
+            except Exception:
+                await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
+        elif update.callback_query and update.callback_query.message:
+            try:
+                await update.callback_query.edit_message_text(text, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
+            except Exception:
+                await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
     
     @staticmethod
     async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -54,13 +67,14 @@ class SettingsHandler:
         settings = user_data.get('settings', {}) if user_data else {}
         
         notifications = "✅" if settings.get('notifications', True) else "❌"
+        lang_name = SUPPORTED_LANGUAGES.get(settings.get('language', 'en'), 'English')
         
         settings_text = f"""
 ⚙️ **Settings**
 ━━━━━━━━━━━━━━━━━━━━━
 
 **Notifications:** {notifications}
-**Language:** {SUPPORTED_LANGUAGES.get(settings.get('language', 'en'), 'English')}
+**Language:** {lang_name}
 **Privacy:** Public
 **Game Mode:** Normal
 
@@ -82,48 +96,56 @@ class SettingsHandler:
             [InlineKeyboardButton("🔙 Back to Menu", callback_data="main_menu")]
         ]
         
-        await update.message.reply_text(
-            settings_text,
-            parse_mode='Markdown',
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
+        if update.message:
+            try:
+                await update.message.reply_text(settings_text, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
+            except Exception:
+                await update.message.reply_text(settings_text, reply_markup=InlineKeyboardMarkup(keyboard))
+        elif update.callback_query and update.callback_query.message:
+            try:
+                await update.callback_query.edit_message_text(settings_text, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
+            except Exception:
+                await update.callback_query.edit_message_text(settings_text, reply_markup=InlineKeyboardMarkup(keyboard))
     
     @staticmethod
     async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle settings callbacks"""
         query = update.callback_query
-        await query.answer()
+        if not query:
+            return
+        
+        try:
+            await query.answer()
+        except Exception:
+            pass
         
         user = update.effective_user
+        if not user or not query.message:
+            return
+        
         data = query.data
         
         if data.startswith("lang_"):
             lang_code = data.replace("lang_", "")
             
-            # Update user language
             await db.update_one(
                 'users',
                 {'telegram_id': user.id},
-                {
-                    '$set': {
-                        'language': lang_code,
-                        'settings.language': lang_code
-                    }
-                }
+                {'$set': {'language': lang_code, 'settings.language': lang_code}}
             )
             
-            await query.edit_message_text(
-                f"✅ Language changed to {SUPPORTED_LANGUAGES.get(lang_code, 'English')}",
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🔙 Back to Menu", callback_data="main_menu")]
-                ])
-            )
+            text = f"✅ Language changed to {SUPPORTED_LANGUAGES.get(lang_code, 'English')}"
+            keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Menu", callback_data="main_menu")]])
+            
+            try:
+                await query.edit_message_text(text, reply_markup=keyboard)
+            except Exception:
+                await query.message.reply_text(text, reply_markup=keyboard)
         
         elif data == "settings_language":
             await SettingsHandler.language_command(update, context)
         
         elif data == "settings_notifications":
-            # Toggle notifications
             user_data = await db.find_one('users', {'telegram_id': user.id})
             current = user_data.get('settings', {}).get('notifications', True)
             
@@ -133,21 +155,60 @@ class SettingsHandler:
                 {'$set': {'settings.notifications': not current}}
             )
             
-            await query.edit_message_text(
-                f"🔔 Notifications {'enabled' if not current else 'disabled'}",
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🔙 Back to Settings", callback_data="settings")]
-                ])
-            )
+            text = f"🔔 Notifications {'enabled' if not current else 'disabled'}"
+            keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Settings", callback_data="settings")]])
+            
+            try:
+                await query.edit_message_text(text, reply_markup=keyboard)
+            except Exception:
+                await query.message.reply_text(text, reply_markup=keyboard)
+        
+        elif data == "settings_privacy":
+            text = """
+🔒 **Privacy Settings**
+━━━━━━━━━━━━━━━━━━━━━
+
+**Profile Visibility:** Public
+**Show Online Status:** Yes
+**Show Game Stats:** Yes
+**Show Achievements:** Yes
+
+To change privacy settings, contact an admin.
+            """
+            keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Settings", callback_data="settings")]])
+            try:
+                await query.edit_message_text(text, parse_mode='Markdown', reply_markup=keyboard)
+            except Exception:
+                await query.edit_message_text(text, reply_markup=keyboard)
+        
+        elif data == "settings_gamemode":
+            text = """
+🎮 **Game Mode Settings**
+━━━━━━━━━━━━━━━━━━━━━
+
+**Current Mode:** Normal
+
+**Available Modes:**
+• Normal - Standard gameplay
+• Hardcore - Increased difficulty, better rewards
+• Casual - Relaxed gameplay, lower rewards
+
+To change game mode, contact an admin.
+            """
+            keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Settings", callback_data="settings")]])
+            try:
+                await query.edit_message_text(text, parse_mode='Markdown', reply_markup=keyboard)
+            except Exception:
+                await query.edit_message_text(text, reply_markup=keyboard)
         
         elif data == "settings":
             await SettingsHandler.settings_command(update, context)
         
         elif data == "main_menu":
             from keyboards.menus import get_main_menu
-            await query.edit_message_text(
-                "🎮 Select a game to play:",
-                reply_markup=await get_main_menu(user.id)
-            )
+            try:
+                await query.edit_message_text("🎮 Select a game to play:", reply_markup=await get_main_menu(user.id))
+            except Exception:
+                await query.message.reply_text("🎮 Select a game to play:", reply_markup=await get_main_menu(user.id))
 
 settings_handler = SettingsHandler()
