@@ -4,6 +4,7 @@ from services.battle import BattleService
 from datetime import datetime, timedelta
 import random
 import logging
+from typing import Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
 
