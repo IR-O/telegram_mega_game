@@ -4,6 +4,14 @@ from database.mongodb import db
 
 class LeaderboardHandler:
     @staticmethod
+    def escape_markdown(text: str) -> str:
+        """Escape special characters for Markdown"""
+        special_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
+        for char in special_chars:
+            text = text.replace(char, f'\\{char}')
+        return text
+
+    @staticmethod
     async def top_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /top command"""
         keyboard = [
@@ -19,116 +27,127 @@ class LeaderboardHandler:
                 InlineKeyboardButton("🏆 Most Wins", callback_data="top_wins"),
                 InlineKeyboardButton("🏅 Best Gang", callback_data="top_gang")
             ],
-            [
-                InlineKeyboardButton("🐉 Best Dragon Trainer", callback_data="top_dragon"),
-                InlineKeyboardButton("🏴‍☠️ Best Pirate", callback_data="top_pirate")
-            ],
-            [
-                InlineKeyboardButton("🏎️ Best Racer", callback_data="top_racer"),
-                InlineKeyboardButton("🌌 Galaxy Leader", callback_data="top_galaxy")
-            ],
             [InlineKeyboardButton("🔙 Back to Menu", callback_data="main_menu")]
         ]
         
-        await update.message.reply_text(
-            "🏆 **Leaderboards**\n\nSelect a category:",
-            parse_mode='Markdown',
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
+        text = "🏆 **Leaderboards**\n\nSelect a category:"
+        
+        if update.message:
+            try:
+                await update.message.reply_text(text, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
+            except Exception:
+                await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
+        elif update.callback_query and update.callback_query.message:
+            try:
+                await update.callback_query.edit_message_text(text, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
+            except Exception:
+                await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
     
     @staticmethod
     async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle leaderboard callbacks"""
         query = update.callback_query
-        await query.answer()
+        if not query:
+            return
+        
+        try:
+            await query.answer()
+        except Exception:
+            pass
+        
+        user = update.effective_user
+        if not user or not query.message:
+            return
         
         data = query.data
         
         if data == "top_richest":
-            # Get richest users
-            users = await db.find(
-                'users',
-                {},
-                limit=10,
-                sort=[('coins', -1)]
-            )
-            
+            users = await db.find('users', {}, limit=10, sort=[('coins', -1)])
             text = "💰 **Richest Players**\n\n"
-            for i, user in enumerate(users, 1):
-                name = user.get('first_name', 'Unknown')
-                coins = user.get('coins', 0)
+            for i, u in enumerate(users, 1):
+                name = LeaderboardHandler.escape_markdown(u.get('first_name', 'Unknown'))
+                coins = u.get('coins', 0)
                 text += f"{i}. {name} - {coins:,} coins\n"
-            
-            await query.edit_message_text(
-                text,
-                parse_mode='Markdown',
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🔙 Back to Top", callback_data="top")]
-                ])
-            )
+            keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Top", callback_data="top")]])
+            try:
+                await query.edit_message_text(text, parse_mode='Markdown', reply_markup=keyboard)
+            except Exception:
+                await query.edit_message_text(text, reply_markup=keyboard)
         
         elif data == "top_level":
-            users = await db.find(
-                'users',
-                {},
-                limit=10,
-                sort=[('level', -1)]
-            )
-            
+            users = await db.find('users', {}, limit=10, sort=[('level', -1)])
             text = "📈 **Highest Level Players**\n\n"
-            for i, user in enumerate(users, 1):
-                name = user.get('first_name', 'Unknown')
-                level = user.get('level', 1)
-                xp = user.get('xp', 0)
-                text += f"{i}. {name} - Level {level} (XP: {xp})\n"
-            
-            await query.edit_message_text(
-                text,
-                parse_mode='Markdown',
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🔙 Back to Top", callback_data="top")]
-                ])
-            )
+            for i, u in enumerate(users, 1):
+                name = LeaderboardHandler.escape_markdown(u.get('first_name', 'Unknown'))
+                level = u.get('level', 1)
+                text += f"{i}. {name} - Level {level}\n"
+            keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Top", callback_data="top")]])
+            try:
+                await query.edit_message_text(text, parse_mode='Markdown', reply_markup=keyboard)
+            except Exception:
+                await query.edit_message_text(text, reply_markup=keyboard)
         
         elif data == "top_respect":
-            users = await db.find(
-                'users',
-                {},
-                limit=10,
-                sort=[('respect', -1)]
-            )
-            
+            users = await db.find('users', {}, limit=10, sort=[('respect', -1)])
             text = "⭐ **Most Respectable Players**\n\n"
-            for i, user in enumerate(users, 1):
-                name = user.get('first_name', 'Unknown')
-                respect = user.get('respect', 0)
+            for i, u in enumerate(users, 1):
+                name = LeaderboardHandler.escape_markdown(u.get('first_name', 'Unknown'))
+                respect = u.get('respect', 0)
                 text += f"{i}. {name} - {respect} respect\n"
-            
-            await query.edit_message_text(
-                text,
-                parse_mode='Markdown',
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🔙 Back to Top", callback_data="top")]
-                ])
-            )
+            keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Top", callback_data="top")]])
+            try:
+                await query.edit_message_text(text, parse_mode='Markdown', reply_markup=keyboard)
+            except Exception:
+                await query.edit_message_text(text, reply_markup=keyboard)
+        
+        elif data == "top_strength":
+            users = await db.find('users', {}, limit=10, sort=[('total_wins', -1)])
+            text = "⚔️ **Strongest Players**\n\n"
+            for i, u in enumerate(users, 1):
+                name = LeaderboardHandler.escape_markdown(u.get('first_name', 'Unknown'))
+                wins = u.get('total_wins', 0)
+                text += f"{i}. {name} - {wins} wins\n"
+            keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Top", callback_data="top")]])
+            try:
+                await query.edit_message_text(text, parse_mode='Markdown', reply_markup=keyboard)
+            except Exception:
+                await query.edit_message_text(text, reply_markup=keyboard)
+        
+        elif data == "top_wins":
+            users = await db.find('users', {}, limit=10, sort=[('total_wins', -1)])
+            text = "🏆 **Most Wins**\n\n"
+            for i, u in enumerate(users, 1):
+                name = LeaderboardHandler.escape_markdown(u.get('first_name', 'Unknown'))
+                wins = u.get('total_wins', 0)
+                text += f"{i}. {name} - {wins} wins\n"
+            keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Top", callback_data="top")]])
+            try:
+                await query.edit_message_text(text, parse_mode='Markdown', reply_markup=keyboard)
+            except Exception:
+                await query.edit_message_text(text, reply_markup=keyboard)
+        
+        elif data == "top_gang":
+            gangs = await db.find('gangs', {}, limit=10, sort=[('power', -1)])
+            text = "🏅 **Best Gangs**\n\n"
+            for i, g in enumerate(gangs, 1):
+                name = LeaderboardHandler.escape_markdown(g.get('name', 'Unknown'))
+                power = g.get('power', 0)
+                members = g.get('members', 0)
+                text += f"{i}. {name} - Power: {power}, Members: {members}\n"
+            keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Top", callback_data="top")]])
+            try:
+                await query.edit_message_text(text, parse_mode='Markdown', reply_markup=keyboard)
+            except Exception:
+                await query.edit_message_text(text, reply_markup=keyboard)
         
         elif data == "top":
             await LeaderboardHandler.top_command(update, context)
         
         elif data == "main_menu":
             from keyboards.menus import get_main_menu
-            await query.edit_message_text(
-                "🎮 Select a game to play:",
-                reply_markup=await get_main_menu(update.effective_user.id)
-            )
-        
-        else:
-            await query.edit_message_text(
-                "🏆 **Leaderboard**\n\n"
-                "Category coming soon!",
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🔙 Back to Top", callback_data="top")]
-                ])
-            )
+            try:
+                await query.edit_message_text("🎮 Select a game to play:", reply_markup=await get_main_menu(user.id))
+            except Exception:
+                await query.message.reply_text("🎮 Select a game to play:", reply_markup=await get_main_menu(user.id))
 
 leaderboard_handler = LeaderboardHandler()
