@@ -1,6 +1,7 @@
 from database.mongodb import db
 from datetime import datetime
 import logging
+from typing import Dict, Any, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -72,8 +73,20 @@ class AchievementService:
     }
     
     @staticmethod
-    async def check_achievements(user_id: int):
-        """Check and unlock achievements for a user"""
+    async def check_achievements(user_id: Optional[int] = None):
+        """Check and unlock achievements for a user or all users"""
+        if user_id:
+            # Check for specific user
+            await AchievementService._check_user_achievements(user_id)
+        else:
+            # Check for all users (background task)
+            users = await db.find('users', {})
+            for user in users:
+                await AchievementService._check_user_achievements(user['telegram_id'])
+    
+    @staticmethod
+    async def _check_user_achievements(user_id: int):
+        """Check achievements for a single user"""
         user = await db.find_one('users', {'telegram_id': user_id})
         if not user:
             return []
@@ -92,7 +105,6 @@ class AchievementService:
             condition_met = True
             for key, value in achievement['condition'].items():
                 if key == '$gte':
-                    # Handle MongoDB-like conditions
                     continue
                 if user.get(key, 0) < value:
                     condition_met = False
