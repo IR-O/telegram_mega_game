@@ -18,9 +18,16 @@ from handlers.games import games_handler
 from handlers.leaderboard import leaderboard_handler
 from handlers.settings import settings_handler
 from handlers.admin import admin_handler
+from handlers.inventory import inventory_handler
+from handlers.trading import trading_handler
+from handlers.missions import missions_handler
 from services.events import EventService
 from services.achievements import AchievementService
+from services.notifications import NotificationService
 import datetime
+import random
+import signal
+import sys
 
 # Setup logging
 logging.basicConfig(
@@ -34,20 +41,39 @@ class MegaGameBot:
         self.application = None
         self.event_service = EventService()
         self.achievement_service = AchievementService()
+        self.notification_service = NotificationService()
+        self.background_tasks = []
+        self.is_running = False
     
     async def initialize(self):
         """Initialize bot components"""
-        # Connect to MongoDB
-        await db.connect()
-        logger.info("MongoDB connected")
-        
-        # Create application
-        self.application = Application.builder().token(Config.BOT_TOKEN).build()
-        
-        # Register handlers
-        await self.register_handlers()
-        
-        logger.info("Bot initialized successfully")
+        try:
+            # Connect to MongoDB
+            await db.connect()
+            logger.info("MongoDB connected")
+            
+            # Create application with proper settings
+            self.application = Application.builder().token(Config.BOT_TOKEN).build()
+            
+            # Register handlers
+            await self.register_handlers()
+            
+            # Setup signal handlers for graceful shutdown
+            signal.signal(signal.SIGINT, self.signal_handler)
+            signal.signal(signal.SIGTERM, self.signal_handler)
+            
+            self.is_running = True
+            logger.info("Bot initialized successfully")
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize bot: {e}")
+            raise
+    
+    def signal_handler(self, signum, frame):
+        """Handle shutdown signals"""
+        logger.info(f"Received signal {signum}, shutting down...")
+        self.is_running = False
+        sys.exit(0)
     
     async def register_handlers(self):
         """Register all command and callback handlers"""
@@ -66,6 +92,11 @@ class MegaGameBot:
         app.add_handler(CommandHandler("language", settings_handler.language_command))
         app.add_handler(CommandHandler("settings", settings_handler.settings_command))
         app.add_handler(CommandHandler("admin", admin_handler.admin_command))
+        app.add_handler(CommandHandler("inventory", inventory_handler.inventory_command))
+        app.add_handler(CommandHandler("trade", trading_handler.trade_command))
+        app.add_handler(CommandHandler("missions", missions_handler.missions_command))
+        
+        # Game command handlers
         app.add_handler(CommandHandler("mafia", games_handler.mafia_command))
         app.add_handler(CommandHandler("space", games_handler.space_command))
         app.add_handler(CommandHandler("zombies", games_handler.zombies_command))
@@ -81,11 +112,33 @@ class MegaGameBot:
         app.add_handler(CommandHandler("racing", games_handler.racing_command))
         
         # Callback query handlers
-        app.add_handler(CallbackQueryHandler(games_handler.handle_callback))
-        app.add_handler(CallbackQueryHandler(profile_handler.handle_callback))
-        app.add_handler(CallbackQueryHandler(economy_handler.handle_callback))
-        app.add_handler(CallbackQueryHandler(settings_handler.handle_callback))
-        app.add_handler(CallbackQueryHandler(admin_handler.handle_callback))
+        app.add_handler(CallbackQueryHandler(games_handler.handle_callback, pattern="^game_"))
+        app.add_handler(CallbackQueryHandler(games_handler.handle_callback, pattern="^mafia_"))
+        app.add_handler(CallbackQueryHandler(games_handler.handle_callback, pattern="^space_"))
+        app.add_handler(CallbackQueryHandler(games_handler.handle_callback, pattern="^zombies_"))
+        app.add_handler(CallbackQueryHandler(games_handler.handle_callback, pattern="^pirates_"))
+        app.add_handler(CallbackQueryHandler(games_handler.handle_callback, pattern="^mutation_"))
+        app.add_handler(CallbackQueryHandler(games_handler.handle_callback, pattern="^haunted_"))
+        app.add_handler(CallbackQueryHandler(games_handler.handle_callback, pattern="^mind_"))
+        app.add_handler(CallbackQueryHandler(games_handler.handle_callback, pattern="^city_"))
+        app.add_handler(CallbackQueryHandler(games_handler.handle_callback, pattern="^spy_"))
+        app.add_handler(CallbackQueryHandler(games_handler.handle_callback, pattern="^dragons_"))
+        app.add_handler(CallbackQueryHandler(games_handler.handle_callback, pattern="^cards_"))
+        app.add_handler(CallbackQueryHandler(games_handler.handle_callback, pattern="^detective_"))
+        app.add_handler(CallbackQueryHandler(games_handler.handle_callback, pattern="^racing_"))
+        
+        # General callback handlers
+        app.add_handler(CallbackQueryHandler(profile_handler.handle_callback, pattern="^profile"))
+        app.add_handler(CallbackQueryHandler(economy_handler.handle_callback, pattern="^(bank|balance|transactions)"))
+        app.add_handler(CallbackQueryHandler(settings_handler.handle_callback, pattern="^settings"))
+        app.add_handler(CallbackQueryHandler(admin_handler.handle_callback, pattern="^admin"))
+        app.add_handler(CallbackQueryHandler(leaderboard_handler.handle_callback, pattern="^top"))
+        app.add_handler(CallbackQueryHandler(inventory_handler.handle_callback, pattern="^inventory"))
+        app.add_handler(CallbackQueryHandler(trading_handler.handle_callback, pattern="^trade"))
+        app.add_handler(CallbackQueryHandler(missions_handler.handle_callback, pattern="^missions"))
+        
+        # Main menu callback
+        app.add_handler(CallbackQueryHandler(games_handler.handle_callback, pattern="^main_menu"))
         
         # Message handlers (for group chats)
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_group_message))
@@ -107,9 +160,10 @@ class MegaGameBot:
                 {'$set': {'last_active': datetime.datetime.utcnow()}}
             )
             
-            # Check for message streak (random reward chance)
-            if random.random() < 0.01:  # 1% chance
-                await economy_handler.add_coins(
+            # Random reward for activity (1% chance)
+            if random.random() < 0.01:
+                from services.economy import EconomyService
+                await EconomyService.add_coins(
                     user.id,
                     random.randint(1, 5),
                     'Message bonus'
@@ -124,14 +178,14 @@ class MegaGameBot:
                 await update.effective_message.reply_text(
                     "❌ An error occurred. Please try again later."
                 )
-        except:
-            pass
+        except Exception as e:
+            logger.error(f"Error in error handler: {e}")
     
     async def run_background_tasks(self):
         """Run background tasks"""
-        while True:
+        while self.is_running:
             try:
-                # Check events
+                # Check and spawn events
                 await self.event_service.check_and_spawn_events()
                 
                 # Check achievements
@@ -143,37 +197,99 @@ class MegaGameBot:
                     {'expires_at': {'$lt': datetime.datetime.utcnow()}}
                 )
                 
+                # Process notifications
+                await self.notification_service.process_notifications()
+                
                 # Update group worlds
                 await self.update_group_worlds()
                 
                 await asyncio.sleep(60)  # Run every minute
+                
+            except asyncio.CancelledError:
+                logger.info("Background task cancelled")
+                break
             except Exception as e:
                 logger.error(f"Background task error: {e}")
                 await asyncio.sleep(60)
     
     async def update_group_worlds(self):
         """Update group world statistics"""
-        # Update group worlds periodically
-        pass
+        try:
+            # Update group world data
+            groups = await db.find('group_worlds', {})
+            for group in groups:
+                # Update threat level based on activity
+                last_active = group.get('last_active', datetime.datetime.utcnow())
+                hours_since = (datetime.datetime.utcnow() - last_active).total_seconds() / 3600
+                
+                if hours_since > 24:
+                    threat_increase = min(10, hours_since / 24)
+                    await db.update_one(
+                        'group_worlds',
+                        {'group_id': group['group_id']},
+                        {'$inc': {'threat_level': threat_increase}}
+                    )
+        except Exception as e:
+            logger.error(f"Error updating group worlds: {e}")
     
     async def run(self):
         """Start the bot"""
-        await self.initialize()
-        
-        # Start background tasks
-        asyncio.create_task(self.run_background_tasks())
-        
-        # Start bot
-        logger.info("Starting bot...")
-        await self.application.run_polling(
-            allowed_updates=Update.ALL_TYPES,
-            drop_pending_updates=True
-        )
+        try:
+            await self.initialize()
+            
+            # Start background tasks
+            task = asyncio.create_task(self.run_background_tasks())
+            self.background_tasks.append(task)
+            
+            # Start bot with polling
+            logger.info("Starting bot polling...")
+            
+            # Use the proper polling method for python-telegram-bot v20+
+            await self.application.initialize()
+            await self.application.start()
+            
+            # Start polling without the problematic attribute
+            await self.application.updater.start_polling(
+                allowed_updates=Update.ALL_TYPES,
+                drop_pending_updates=True
+            )
+            
+            # Keep the bot running
+            while self.is_running:
+                await asyncio.sleep(1)
+                
+        except asyncio.CancelledError:
+            logger.info("Bot task cancelled")
+        except Exception as e:
+            logger.error(f"Fatal error: {e}")
+            raise
+        finally:
+            await self.shutdown()
     
     async def shutdown(self):
-        """Shutdown the bot"""
+        """Shutdown the bot gracefully"""
+        self.is_running = False
+        
+        # Cancel background tasks
+        for task in self.background_tasks:
+            if not task.done():
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+        
+        # Shutdown application
         if self.application:
-            await self.application.shutdown()
+            try:
+                if hasattr(self.application, 'updater') and self.application.updater:
+                    await self.application.updater.stop()
+                await self.application.stop()
+                await self.application.shutdown()
+            except Exception as e:
+                logger.error(f"Error during application shutdown: {e}")
+        
+        # Close database connection
         await db.close()
         logger.info("Bot shutdown complete")
 
@@ -183,10 +299,13 @@ async def main():
     try:
         await bot.run()
     except KeyboardInterrupt:
+        logger.info("Received keyboard interrupt")
         await bot.shutdown()
     except Exception as e:
         logger.error(f"Fatal error: {e}")
         await bot.shutdown()
+        raise
 
 if __name__ == "__main__":
+    # Run the bot
     asyncio.run(main())
