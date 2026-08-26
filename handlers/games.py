@@ -5,6 +5,15 @@ from games.mafia import MafiaGame
 from games.space import SpaceGame
 from games.zombies import ZombieGame
 from games.pirates import PirateGame
+from games.mutation import MutationGame
+from games.haunted import HauntedGame
+from games.mind_wars import MindWarsGame
+from games.city import CityGame
+from games.spy import SpyGame
+from games.dragons import DragonGame
+from games.cards import CardGame
+from games.detective import DetectiveGame
+from games.racing import RacingGame
 from keyboards.menus import get_main_menu, get_game_keyboard
 from datetime import datetime
 import random
@@ -18,6 +27,15 @@ class GamesHandler:
         self.space_game = SpaceGame()
         self.zombie_game = ZombieGame()
         self.pirate_game = PirateGame()
+        self.mutation_game = MutationGame()
+        self.haunted_game = HauntedGame()
+        self.mind_wars_game = MindWarsGame()
+        self.city_game = CityGame()
+        self.spy_game = SpyGame()
+        self.dragon_game = DragonGame()
+        self.card_game = CardGame()
+        self.detective_game = DetectiveGame()
+        self.racing_game = RacingGame()
     
     @staticmethod
     async def mafia_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -172,8 +190,6 @@ Wanted: {'⭐' * mafia_data.get('wanted_level', 0)}
     @staticmethod
     async def mutation_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /mutation command"""
-        user = update.effective_user
-        
         mutation_text = """
 🧪 **MUTATION LAB**
 ━━━━━━━━━━━━━━━━━━━━━
@@ -559,18 +575,46 @@ Durability: 0
     
     @staticmethod
     async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle game callbacks"""
+        """Handle game callbacks with proper error handling"""
         query = update.callback_query
-        await query.answer()
+        
+        if not query:
+            logger.warning("Callback query is None")
+            return
+        
+        try:
+            await query.answer()
+        except Exception as e:
+            logger.error(f"Error answering callback: {e}")
+            return
         
         user = update.effective_user
+        if not user:
+            logger.warning("User is None in callback")
+            return
+        
         data = query.data
+        if not data:
+            logger.warning("Callback data is None")
+            return
+        
+        # Check if message exists
+        if not query.message:
+            logger.warning("Message is None in callback")
+            try:
+                await query.edit_message_text("❌ This message is no longer available. Please use /start to continue.")
+            except Exception:
+                pass
+            return
         
         if data == "main_menu":
-            await query.edit_message_text(
-                "🎮 Select a game to play:",
-                reply_markup=await get_main_menu(user.id)
-            )
+            try:
+                await query.edit_message_text(
+                    "🎮 Select a game to play:",
+                    reply_markup=await get_main_menu(user.id)
+                )
+            except Exception as e:
+                logger.error(f"Error showing main menu: {e}")
         
         elif data.startswith("game_"):
             game_name = data.replace("game_", "")
@@ -593,14 +637,36 @@ Durability: 0
             }
             
             if game_name in game_handlers:
-                # Create a fake update with the message
-                await game_handlers[game_name](update, context)
+                try:
+                    # Create a new message for the game
+                    await query.edit_message_text(
+                        f"🎮 Loading {game_name.title()}...",
+                        reply_markup=InlineKeyboardMarkup([
+                            [InlineKeyboardButton("⏳ Loading...", callback_data="dummy")]
+                        ])
+                    )
+                    # Send the game content as a new message
+                    await game_handlers[game_name](update, context)
+                except Exception as e:
+                    logger.error(f"Error loading game {game_name}: {e}")
+                    try:
+                        await query.edit_message_text(
+                            f"❌ Error loading {game_name}. Please try again.",
+                            reply_markup=InlineKeyboardMarkup([
+                                [InlineKeyboardButton("🔙 Back to Menu", callback_data="main_menu")]
+                            ])
+                        )
+                    except Exception:
+                        pass
             else:
-                await query.edit_message_text(
-                    f"🎮 {game_name.title()} game coming soon!",
-                    reply_markup=InlineKeyboardMarkup([
-                        [InlineKeyboardButton("🔙 Back to Menu", callback_data="main_menu")]
-                    ])
-                )
+                try:
+                    await query.edit_message_text(
+                        f"🎮 {game_name.title()} game coming soon!",
+                        reply_markup=InlineKeyboardMarkup([
+                            [InlineKeyboardButton("🔙 Back to Menu", callback_data="main_menu")]
+                        ])
+                    )
+                except Exception as e:
+                    logger.error(f"Error showing game coming soon: {e}")
 
 games_handler = GamesHandler()
