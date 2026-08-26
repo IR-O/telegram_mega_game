@@ -43,24 +43,18 @@ class TranslationManager:
         """Load all translation files"""
         locales_dir = os.path.join(os.path.dirname(__file__))
         
-        # Load English first as fallback
-        en_file = os.path.join(locales_dir, "en.json")
-        try:
-            with open(en_file, 'r', encoding='utf-8') as f:
-                self._translations['en'] = json.load(f)
-        except FileNotFoundError:
-            self._translations['en'] = {}
-        
-        # Load other languages
+        # Load all language files
         for lang_code in SUPPORTED_LANGUAGES.keys():
-            if lang_code == 'en':
-                continue
             file_path = os.path.join(locales_dir, f"{lang_code}.json")
             try:
                 with open(file_path, 'r', encoding='utf-8') as f:
                     self._translations[lang_code] = json.load(f)
+                print(f"Loaded {lang_code}.json successfully")
             except FileNotFoundError:
-                # Use empty dict and fallback to English
+                print(f"Warning: {lang_code}.json not found, using English as fallback")
+                self._translations[lang_code] = {}
+            except json.JSONDecodeError as e:
+                print(f"Error parsing {lang_code}.json: {e}")
                 self._translations[lang_code] = {}
     
     def get(self, key: str, lang_code: str = 'en', **kwargs) -> str:
@@ -74,19 +68,24 @@ class TranslationManager:
             translations = self._translations.get('en', {})
             text = translations.get(key)
         
-        # If still not found, return the key itself
+        # If still not found, return the key itself with a warning
         if text is None:
+            print(f"Warning: Translation key '{key}' not found for language '{lang_code}'")
             text = key
         
         # Format with kwargs
-        if kwargs:
+        if kwargs and text:
             try:
                 text = text.format(**kwargs)
-            except:
-                # If formatting fails, return unformatted text
-                pass
+            except Exception as e:
+                print(f"Warning: Could not format translation '{key}': {e}")
+                # Return as is
         
         return text
+    
+    def get_language_name(self, lang_code: str) -> str:
+        """Get language name from code"""
+        return SUPPORTED_LANGUAGES.get(lang_code, 'English')
 
 # Global translation manager
 translations = TranslationManager()
