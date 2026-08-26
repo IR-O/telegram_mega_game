@@ -10,19 +10,15 @@ class ProfileHandler:
         """Handle /profile command"""
         user = update.effective_user
         
-        # Get user data
         user_data = await db.find_one('users', {'telegram_id': user.id})
         if not user_data:
-            await update.message.reply_text("❌ Please start the bot with /start first")
+            if update.message:
+                await update.message.reply_text("❌ Please start the bot with /start first")
             return
         
-        # Get economy data
         economy = await db.find_one('economy', {'user_id': user.id})
-        
-        # Get achievements
         achievements = await db.find('achievements', {'user_id': user.id})
         
-        # Build profile message
         profile_text = f"""
 👤 **Profile**
 ━━━━━━━━━━━━━━━━━━━━━
@@ -64,22 +60,45 @@ class ProfileHandler:
             [InlineKeyboardButton("🔙 Back to Menu", callback_data="main_menu")]
         ]
         
-        await update.message.reply_text(
-            profile_text,
-            parse_mode='Markdown',
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
+        if update.callback_query and update.callback_query.message:
+            try:
+                await update.callback_query.edit_message_text(
+                    profile_text,
+                    parse_mode='Markdown',
+                    reply_markup=InlineKeyboardMarkup(keyboard)
+                )
+            except Exception:
+                await update.callback_query.message.reply_text(
+                    profile_text,
+                    parse_mode='Markdown',
+                    reply_markup=InlineKeyboardMarkup(keyboard)
+                )
+        elif update.message:
+            await update.message.reply_text(
+                profile_text,
+                parse_mode='Markdown',
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
     
     @staticmethod
     async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle profile callbacks"""
         query = update.callback_query
-        await query.answer()
+        if not query:
+            return
+        
+        try:
+            await query.answer()
+        except Exception:
+            pass
         
         user = update.effective_user
+        if not user or not query.message:
+            return
         
-        if query.data == "profile_full":
-            # Show full stats
+        data = query.data
+        
+        if data == "profile_full":
             user_data = await db.find_one('users', {'telegram_id': user.id})
             economy = await db.find_one('economy', {'user_id': user.id})
             
@@ -102,82 +121,49 @@ class ProfileHandler:
 **Gems Earned:** {economy.get('total_gems_earned', 0) if economy else 0}
             """
             
-            await query.edit_message_text(
-                stats_text,
-                parse_mode='Markdown',
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🔙 Back to Profile", callback_data="profile")]
-                ])
-            )
+            keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Profile", callback_data="profile")]])
+            try:
+                await query.edit_message_text(stats_text, parse_mode='Markdown', reply_markup=keyboard)
+            except Exception:
+                await query.message.reply_text(stats_text, parse_mode='Markdown', reply_markup=keyboard)
         
-        elif query.data == "profile_achievements":
-            # Show achievements
+        elif data == "profile_achievements":
             achievements = await db.find('achievements', {'user_id': user.id})
             
             if not achievements:
-                await query.edit_message_text(
-                    "🎯 No achievements yet. Keep playing to earn them!",
-                    reply_markup=InlineKeyboardMarkup([
-                        [InlineKeyboardButton("🔙 Back to Profile", callback_data="profile")]
-                    ])
-                )
-                return
+                text = "🎯 No achievements yet. Keep playing to earn them!"
+            else:
+                text = "🎯 **Your Achievements**\n\n"
+                for i, achievement in enumerate(achievements[:10], 1):
+                    text += f"{i}. {achievement.get('name', 'Unknown')} - {achievement.get('description', '')}\n"
+                if len(achievements) > 10:
+                    text += f"\n... and {len(achievements) - 10} more"
             
-            achievement_text = "🎯 **Your Achievements**\n\n"
-            for i, achievement in enumerate(achievements[:10], 1):
-                achievement_text += f"{i}. {achievement.get('name', 'Unknown')} - {achievement.get('description', '')}\n"
-            
-            if len(achievements) > 10:
-                achievement_text += f"\n... and {len(achievements) - 10} more"
-            
-            await query.edit_message_text(
-                achievement_text,
-                parse_mode='Markdown',
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🔙 Back to Profile", callback_data="profile")]
-                ])
-            )
+            keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Profile", callback_data="profile")]])
+            try:
+                await query.edit_message_text(text, parse_mode='Markdown', reply_markup=keyboard)
+            except Exception:
+                await query.message.reply_text(text, parse_mode='Markdown', reply_markup=keyboard)
         
-        elif query.data == "profile_titles":
-            # Show titles
+        elif data == "profile_titles":
             user_data = await db.find_one('users', {'telegram_id': user.id})
             titles = user_data.get('titles', [])
             
-            if not titles:
-                await query.edit_message_text(
-                    "📜 No titles yet. Earn titles through gameplay!",
-                    reply_markup=InlineKeyboardMarkup([
-                        [InlineKeyboardButton("🔙 Back to Profile", callback_data="profile")]
-                    ])
-                )
-                return
+            text = "📜 **Your Titles**\n\n" + "\n".join([f"• {title}" for title in titles]) if titles else "📜 No titles yet. Earn titles through gameplay!"
+            keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Profile", callback_data="profile")]])
             
-            title_text = "📜 **Your Titles**\n\n"
-            for title in titles:
-                title_text += f"• {title}\n"
-            
-            await query.edit_message_text(
-                title_text,
-                parse_mode='Markdown',
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🔙 Back to Profile", callback_data="profile")]
-                ])
-            )
+            try:
+                await query.edit_message_text(text, parse_mode='Markdown', reply_markup=keyboard)
+            except Exception:
+                await query.message.reply_text(text, parse_mode='Markdown', reply_markup=keyboard)
         
-        elif query.data == "profile_economy":
-            # Show economy details
+        elif data == "profile_economy":
             economy = await db.find_one('economy', {'user_id': user.id})
             
             if not economy:
-                await query.edit_message_text(
-                    "💰 No economy data found.",
-                    reply_markup=InlineKeyboardMarkup([
-                        [InlineKeyboardButton("🔙 Back to Profile", callback_data="profile")]
-                    ])
-                )
-                return
-            
-            eco_text = f"""
+                text = "💰 No economy data found."
+            else:
+                text = f"""
 💰 **Economy Details**
 ━━━━━━━━━━━━━━━━━━━━━
 
@@ -188,29 +174,24 @@ class ProfileHandler:
 **Total Spent:** {economy.get('total_spent', 0)}
 **Gems Earned:** {economy.get('total_gems_earned', 0)}
 **Daily Streak:** {economy.get('daily_streak', 0)}
-
 **Properties:** {len(economy.get('properties', []))}
 **Businesses:** {len(economy.get('businesses', []))}
-            """
+                """
             
-            await query.edit_message_text(
-                eco_text,
-                parse_mode='Markdown',
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🔙 Back to Profile", callback_data="profile")]
-                ])
-            )
+            keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Profile", callback_data="profile")]])
+            try:
+                await query.edit_message_text(text, parse_mode='Markdown', reply_markup=keyboard)
+            except Exception:
+                await query.message.reply_text(text, parse_mode='Markdown', reply_markup=keyboard)
         
-        elif query.data == "profile":
-            # Show profile
+        elif data == "profile":
             await ProfileHandler.profile_command(update, context)
         
-        elif query.data == "main_menu":
-            # Show main menu
+        elif data == "main_menu":
             from keyboards.menus import get_main_menu
-            await query.edit_message_text(
-                "🎮 Select a game to play:",
-                reply_markup=await get_main_menu(user.id)
-            )
+            try:
+                await query.edit_message_text("🎮 Select a game to play:", reply_markup=await get_main_menu(user.id))
+            except Exception:
+                await query.message.reply_text("🎮 Select a game to play:", reply_markup=await get_main_menu(user.id))
 
 profile_handler = ProfileHandler()
