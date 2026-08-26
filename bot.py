@@ -52,11 +52,11 @@ class MegaGameBot:
             await db.connect()
             logger.info("MongoDB connected")
             
-            # Create application with proper settings
+            # Create application with simpler approach
             self.application = Application.builder().token(Config.BOT_TOKEN).build()
             
             # Register handlers
-            await self.register_handlers()
+            self.register_handlers()
             
             # Setup signal handlers for graceful shutdown
             signal.signal(signal.SIGINT, self.signal_handler)
@@ -75,7 +75,7 @@ class MegaGameBot:
         self.is_running = False
         sys.exit(0)
     
-    async def register_handlers(self):
+    def register_handlers(self):
         """Register all command and callback handlers"""
         app = self.application
         
@@ -112,33 +112,15 @@ class MegaGameBot:
         app.add_handler(CommandHandler("racing", games_handler.racing_command))
         
         # Callback query handlers
-        app.add_handler(CallbackQueryHandler(games_handler.handle_callback, pattern="^game_"))
-        app.add_handler(CallbackQueryHandler(games_handler.handle_callback, pattern="^mafia_"))
-        app.add_handler(CallbackQueryHandler(games_handler.handle_callback, pattern="^space_"))
-        app.add_handler(CallbackQueryHandler(games_handler.handle_callback, pattern="^zombies_"))
-        app.add_handler(CallbackQueryHandler(games_handler.handle_callback, pattern="^pirates_"))
-        app.add_handler(CallbackQueryHandler(games_handler.handle_callback, pattern="^mutation_"))
-        app.add_handler(CallbackQueryHandler(games_handler.handle_callback, pattern="^haunted_"))
-        app.add_handler(CallbackQueryHandler(games_handler.handle_callback, pattern="^mind_"))
-        app.add_handler(CallbackQueryHandler(games_handler.handle_callback, pattern="^city_"))
-        app.add_handler(CallbackQueryHandler(games_handler.handle_callback, pattern="^spy_"))
-        app.add_handler(CallbackQueryHandler(games_handler.handle_callback, pattern="^dragons_"))
-        app.add_handler(CallbackQueryHandler(games_handler.handle_callback, pattern="^cards_"))
-        app.add_handler(CallbackQueryHandler(games_handler.handle_callback, pattern="^detective_"))
-        app.add_handler(CallbackQueryHandler(games_handler.handle_callback, pattern="^racing_"))
-        
-        # General callback handlers
-        app.add_handler(CallbackQueryHandler(profile_handler.handle_callback, pattern="^profile"))
-        app.add_handler(CallbackQueryHandler(economy_handler.handle_callback, pattern="^(bank|balance|transactions)"))
-        app.add_handler(CallbackQueryHandler(settings_handler.handle_callback, pattern="^settings"))
-        app.add_handler(CallbackQueryHandler(admin_handler.handle_callback, pattern="^admin"))
-        app.add_handler(CallbackQueryHandler(leaderboard_handler.handle_callback, pattern="^top"))
-        app.add_handler(CallbackQueryHandler(inventory_handler.handle_callback, pattern="^inventory"))
-        app.add_handler(CallbackQueryHandler(trading_handler.handle_callback, pattern="^trade"))
-        app.add_handler(CallbackQueryHandler(missions_handler.handle_callback, pattern="^missions"))
-        
-        # Main menu callback
-        app.add_handler(CallbackQueryHandler(games_handler.handle_callback, pattern="^main_menu"))
+        app.add_handler(CallbackQueryHandler(games_handler.handle_callback))
+        app.add_handler(CallbackQueryHandler(profile_handler.handle_callback))
+        app.add_handler(CallbackQueryHandler(economy_handler.handle_callback))
+        app.add_handler(CallbackQueryHandler(settings_handler.handle_callback))
+        app.add_handler(CallbackQueryHandler(admin_handler.handle_callback))
+        app.add_handler(CallbackQueryHandler(leaderboard_handler.handle_callback))
+        app.add_handler(CallbackQueryHandler(inventory_handler.handle_callback))
+        app.add_handler(CallbackQueryHandler(trading_handler.handle_callback))
+        app.add_handler(CallbackQueryHandler(missions_handler.handle_callback))
         
         # Message handlers (for group chats)
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_group_message))
@@ -188,8 +170,9 @@ class MegaGameBot:
                 # Check and spawn events
                 await self.event_service.check_and_spawn_events()
                 
-                # Check achievements
-                await self.achievement_service.check_achievements()
+                # Check achievements for all users (run less frequently)
+                if random.random() < 0.1:  # 10% chance each minute
+                    await self.achievement_service.check_achievements()
                 
                 # Clean expired cooldowns
                 await db.delete_many(
@@ -244,11 +227,11 @@ class MegaGameBot:
             # Start bot with polling
             logger.info("Starting bot polling...")
             
-            # Use the proper polling method for python-telegram-bot v20+
+            # Initialize and start the application
             await self.application.initialize()
             await self.application.start()
             
-            # Start polling without the problematic attribute
+            # Use the correct polling method
             await self.application.updater.start_polling(
                 allowed_updates=Update.ALL_TYPES,
                 drop_pending_updates=True
