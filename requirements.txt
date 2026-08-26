@@ -1,4 +1,6 @@
 python-telegram-bot==20.0
+httpx==0.23.1
+httpcore==0.16.0
 motor==3.3.2
 python-dotenv==1.0.0
 pytz==2024.1
