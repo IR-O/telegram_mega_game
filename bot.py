@@ -113,22 +113,34 @@ class MegaGameBot:
         app.add_handler(CommandHandler("detective", games_handler.detective_command))
         app.add_handler(CommandHandler("racing", games_handler.racing_command))
         
-        # Callback query handlers
-        app.add_handler(CallbackQueryHandler(games_handler.handle_callback))
-        app.add_handler(CallbackQueryHandler(profile_handler.handle_callback))
-        app.add_handler(CallbackQueryHandler(economy_handler.handle_callback))
-        app.add_handler(CallbackQueryHandler(settings_handler.handle_callback))
-        app.add_handler(CallbackQueryHandler(admin_handler.handle_callback))
-        app.add_handler(CallbackQueryHandler(leaderboard_handler.handle_callback))
-        app.add_handler(CallbackQueryHandler(inventory_handler.handle_callback))
-        app.add_handler(CallbackQueryHandler(trading_handler.handle_callback))
-        app.add_handler(CallbackQueryHandler(missions_handler.handle_callback))
+        # Callback query handlers - use pattern matching for specific callbacks
+        app.add_handler(CallbackQueryHandler(games_handler.handle_callback, pattern="^(game_|main_menu|mafia_|space_|zombies_|pirates_|mutation_|haunted_|mind_|city_|spy_|dragons_|cards_|detective_|racing_)"))
+        app.add_handler(CallbackQueryHandler(profile_handler.handle_callback, pattern="^profile"))
+        app.add_handler(CallbackQueryHandler(economy_handler.handle_callback, pattern="^(bank|balance|transactions|bank_deposit|bank_withdraw|bank_stats|bank_interest)"))
+        app.add_handler(CallbackQueryHandler(settings_handler.handle_callback, pattern="^settings|^lang_"))
+        app.add_handler(CallbackQueryHandler(admin_handler.handle_callback, pattern="^admin"))
+        app.add_handler(CallbackQueryHandler(leaderboard_handler.handle_callback, pattern="^top"))
+        app.add_handler(CallbackQueryHandler(inventory_handler.handle_callback, pattern="^inventory"))
+        app.add_handler(CallbackQueryHandler(trading_handler.handle_callback, pattern="^trade"))
+        app.add_handler(CallbackQueryHandler(missions_handler.handle_callback, pattern="^missions"))
+        
+        # Fallback callback handler for any unhandled callbacks
+        app.add_handler(CallbackQueryHandler(self.fallback_callback_handler))
         
         # Message handlers (for group chats)
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_group_message))
         
         # Error handler
         app.add_error_handler(self.error_handler)
+    
+    async def fallback_callback_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle any unhandled callbacks"""
+        query = update.callback_query
+        if query:
+            try:
+                await query.answer("⚠️ This feature is not available yet.")
+            except Exception as e:
+                logger.error(f"Error in fallback callback: {e}")
     
     async def handle_group_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle group messages for activity rewards"""
@@ -204,15 +216,11 @@ class MegaGameBot:
     async def update_group_worlds(self):
         """Update group world statistics"""
         try:
-            # Get all group worlds
             groups = await db.find('group_worlds', {})
-            
             for group in groups:
                 try:
-                    # Get last_active safely
                     last_active = group.get('last_active')
                     if not last_active:
-                        # If no last_active, set it to now
                         await db.update_one(
                             'group_worlds',
                             {'group_id': group.get('group_id')},
@@ -220,19 +228,12 @@ class MegaGameBot:
                         )
                         continue
                     
-                    # Calculate hours since last activity
                     hours_since = (datetime.datetime.utcnow() - last_active).total_seconds() / 3600
-                    
                     if hours_since > 24:
-                        # Increase threat level based on inactivity
                         threat_increase = min(10, hours_since / 24)
-                        
-                        # Get current threat level safely
                         current_threat = group.get('threat_level', 0)
                         if isinstance(current_threat, dict):
                             current_threat = 0
-                        
-                        # Update threat level
                         await db.update_one(
                             'group_worlds',
                             {'group_id': group.get('group_id')},
@@ -246,7 +247,6 @@ class MegaGameBot:
                 except Exception as e:
                     logger.error(f"Error updating group {group.get('group_id', 'unknown')}: {e}")
                     continue
-                    
         except Exception as e:
             logger.error(f"Error updating group worlds: {e}")
     
@@ -290,11 +290,9 @@ class MegaGameBot:
         """Shutdown the bot gracefully"""
         logger.info("Starting graceful shutdown...")
         
-        # Set shutdown event
         self.is_running = False
         self.shutdown_event.set()
         
-        # Cancel background tasks with timeout
         if self.background_tasks:
             for task in self.background_tasks:
                 if not task.done():
@@ -306,7 +304,6 @@ class MegaGameBot:
                     except asyncio.CancelledError:
                         pass
         
-        # Shutdown application with timeout
         if self.application:
             try:
                 if hasattr(self.application, 'updater') and self.application.updater:
@@ -318,7 +315,6 @@ class MegaGameBot:
             except Exception as e:
                 logger.error(f"Error during application shutdown: {e}")
         
-        # Close database connection
         try:
             await asyncio.wait_for(db.close(), timeout=5.0)
         except asyncio.TimeoutError:
@@ -341,10 +337,8 @@ async def main():
         await bot.shutdown()
         raise
     finally:
-        # Force exit if needed
         logger.info("Exiting...")
         sys.exit(0)
 
 if __name__ == "__main__":
-    # Run the bot
     asyncio.run(main())
