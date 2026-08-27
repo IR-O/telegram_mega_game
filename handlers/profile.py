@@ -1,20 +1,19 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from database.mongodb import db
+from locales.translations import get_translation
 from datetime import datetime, timedelta
 import re
-import html
 
 class ProfileHandler:
     @staticmethod
     def escape_markdown(text: str) -> str:
         """Escape special characters for Markdown"""
-        # Escape special Markdown characters
         special_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
         for char in special_chars:
             text = text.replace(char, f'\\{char}')
         return text
-    
+
     @staticmethod
     async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /profile command"""
@@ -26,6 +25,9 @@ class ProfileHandler:
                 await update.message.reply_text("❌ Please start the bot with /start first")
             return
         
+        # Get user's language
+        lang = user_data.get('language', 'en')
+        
         economy = await db.find_one('economy', {'user_id': user.id})
         achievements = await db.find('achievements', {'user_id': user.id})
         
@@ -35,37 +37,37 @@ class ProfileHandler:
         titles = [ProfileHandler.escape_markdown(t) for t in user_data.get('titles', ['None'])]
         
         profile_text = f"""
-👤 **Profile**
+👤 **{get_translation('profile', lang)}**
 ━━━━━━━━━━━━━━━━━━━━━
 
-**Name:** {first_name}
+**{get_translation('profile_name', lang)}:** {first_name}
 **Username:** @{username}
-**Level:** {user_data.get('level', 1)}
-**XP:** {user_data.get('xp', 0)} / {user_data.get('level', 1) * 100}
-**Respect:** {user_data.get('respect', 0)}
+**{get_translation('profile_level', lang)}:** {user_data.get('level', 1)}
+**{get_translation('profile_xp', lang)}:** {user_data.get('xp', 0)} / {user_data.get('level', 1) * 100}
+**{get_translation('profile_respect', lang)}:** {user_data.get('respect', 0)}
 
-**💰 Economy**
+**💰 {get_translation('balance', lang)}**
 ━━━━━━━━━━━━━━━━━━━━━
-**Coins:** {economy.get('coins', 0) if economy else 0}
-**Gems:** {economy.get('gems', 0) if economy else 0}
-**Bank:** {economy.get('bank', 0) if economy else 0}
+**{get_translation('balance_coins', lang)}:** {economy.get('coins', 0) if economy else 0}
+**{get_translation('balance_gems', lang)}:** {economy.get('gems', 0) if economy else 0}
+**{get_translation('balance_bank', lang)}:** {economy.get('bank', 0) if economy else 0}
 
-**📊 Statistics**
+**📊 {get_translation('profile', lang)}**
 ━━━━━━━━━━━━━━━━━━━━━
-**Wins:** {user_data.get('total_wins', 0)}
-**Losses:** {user_data.get('total_losses', 0)}
-**Games Played:** {user_data.get('games_played', 0)}
-**Daily Streak:** {economy.get('daily_streak', 0) if economy else 0}
+**{get_translation('profile_wins', lang)}:** {user_data.get('total_wins', 0)}
+**{get_translation('profile_losses', lang)}:** {user_data.get('total_losses', 0)}
+**{get_translation('profile_games_played', lang)}:** {user_data.get('games_played', 0)}
+**{get_translation('profile_daily_streak', lang)}:** {economy.get('daily_streak', 0) if economy else 0}
 
-**🏆 Achievements:** {len(achievements)}
-**Titles:** {', '.join(titles)}
+**🏆 {get_translation('profile_achievements', lang)}:** {len(achievements)}
+**{get_translation('profile_titles', lang)}:** {', '.join(titles)}
 
-**📅 Member Since:** {user_data.get('created_at', datetime.utcnow()).strftime('%Y-%m-%d')}
+**{get_translation('profile_member_since', lang)}:** {user_data.get('created_at', datetime.utcnow()).strftime('%Y-%m-%d')}
         """
         
         keyboard = [
             [
-                InlineKeyboardButton("📊 Full Stats", callback_data="profile_full"),
+                InlineKeyboardButton("📊 Stats", callback_data="profile_stats"),
                 InlineKeyboardButton("🎯 Achievements", callback_data="profile_achievements")
             ],
             [
@@ -83,7 +85,6 @@ class ProfileHandler:
                     reply_markup=InlineKeyboardMarkup(keyboard)
                 )
             except Exception:
-                # If Markdown fails, send without parse_mode
                 try:
                     await update.callback_query.edit_message_text(
                         profile_text,
@@ -123,6 +124,10 @@ class ProfileHandler:
         if not user or not query.message:
             return
         
+        # Get user's language
+        user_data = await db.find_one('users', {'telegram_id': user.id})
+        lang = user_data.get('language', 'en') if user_data else 'en'
+        
         data = query.data
         
         if data == "profile_full":
@@ -132,7 +137,7 @@ class ProfileHandler:
             first_name = ProfileHandler.escape_markdown(user_data.get('first_name', 'Player'))
             
             stats_text = f"""
-📊 **Full Statistics for {first_name}**
+📊 **{get_translation('profile_full_stats', lang, name=first_name)}**
 ━━━━━━━━━━━━━━━━━━━━━
 
 **🎮 Game Stats:**
@@ -143,7 +148,7 @@ class ProfileHandler:
 **Pirates:** Level {user_data.get('stats', {}).get('pirates', {}).get('level', 1)}
 **Cards:** Level {user_data.get('stats', {}).get('cards', {}).get('level', 1)}
 
-**💎 Economy:**
+**💎 {get_translation('profile_economy_details', lang)}:**
 ━━━━━━━━━━━━━━━━━━━━━
 **Total Earned:** {economy.get('total_earned', 0) if economy else 0}
 **Total Spent:** {economy.get('total_spent', 0) if economy else 0}
@@ -199,7 +204,7 @@ class ProfileHandler:
                 text = "💰 No economy data found."
             else:
                 text = f"""
-💰 **Economy Details**
+💰 **{get_translation('profile_economy_details', lang)}**
 ━━━━━━━━━━━━━━━━━━━━━
 
 **Coins:** {economy.get('coins', 0)}
