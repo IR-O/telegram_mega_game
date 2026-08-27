@@ -1,9 +1,14 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from database.mongodb import db
+from locales.translations import get_translation
 from config import Config
 
 async def get_main_menu(user_id: int) -> InlineKeyboardMarkup:
-    """Get main game menu with pagination"""
+    """Get main game menu with translations"""
+    # Get user's language
+    user_data = await db.find_one('users', {'telegram_id': user_id})
+    lang = user_data.get('language', 'en') if user_data else 'en'
+    
     keyboard = [
         [
             InlineKeyboardButton("⚔️ Mafia", callback_data="game_mafia"),
@@ -44,7 +49,10 @@ async def get_main_menu(user_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(keyboard)
 
 async def get_profile_keyboard(user_id: int) -> InlineKeyboardMarkup:
-    """Get profile keyboard"""
+    """Get profile keyboard with translations"""
+    user_data = await db.find_one('users', {'telegram_id': user_id})
+    lang = user_data.get('language', 'en') if user_data else 'en'
+    
     keyboard = [
         [
             InlineKeyboardButton("📊 Stats", callback_data="profile_stats"),
@@ -63,7 +71,10 @@ async def get_profile_keyboard(user_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(keyboard)
 
 async def get_game_keyboard(game_name: str, user_id: int) -> InlineKeyboardMarkup:
-    """Get game-specific keyboard"""
+    """Get game-specific keyboard with translations"""
+    user_data = await db.find_one('users', {'telegram_id': user_id})
+    lang = user_data.get('language', 'en') if user_data else 'en'
+    
     keyboards = {
         'mafia': [
             [
