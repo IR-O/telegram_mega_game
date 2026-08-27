@@ -87,8 +87,6 @@ class MutationGame:
         ]
         
         creature = random.choice(creature_types)
-        
-        # Check if creature already exists (can have duplicates)
         creature_id = f"{creature['name']}_{datetime.utcnow().timestamp()}"
         
         new_creature = {
@@ -125,44 +123,45 @@ class MutationGame:
         }
     
     @staticmethod
-    async def evolve(user_id: int, creature_id: str) -> dict:
+    async def evolve(user_id: int, creature_id: str = None) -> dict:
         """Evolve a creature"""
         player = await MutationGame.get_player(user_id)
         
-        # Find creature
-        creature = None
-        for c in player['creatures']:
-            if c['id'] == creature_id:
-                creature = c
-                break
-        
-        if not creature:
-            return {'error': 'Creature not found!'}
+        if not player['creatures']:
+            return {'error': 'No creatures to evolve!'}
         
         if player['dna'] < 10:
             return {'error': 'Need 10 DNA to evolve!'}
+        
+        # Get first creature if no ID provided
+        creature = player['creatures'][0] if not creature_id else None
+        if creature_id:
+            for c in player['creatures']:
+                if c['id'] == creature_id:
+                    creature = c
+                    break
+        
+        if not creature:
+            return {'error': 'Creature not found!'}
         
         # Evolution logic
         evolution_chance = 0.5 + creature['level'] * 0.05
         
         if random.random() < evolution_chance:
-            # Successful evolution
             new_level = creature['level'] + 1
             attack_bonus = random.randint(1, 5)
             defense_bonus = random.randint(1, 5)
             
-            # Update creature
             updated_creature = creature.copy()
             updated_creature['level'] = new_level
             updated_creature['attack'] += attack_bonus
             updated_creature['defense'] += defense_bonus
             
-            # Remove old creature and add updated
             await db.update_one(
                 'mutations',
                 {'user_id': user_id},
                 {
-                    '$pull': {'creatures': {'id': creature_id}},
+                    '$pull': {'creatures': {'id': creature_id if creature_id else creature['id']}},
                     '$push': {'creatures': updated_creature},
                     '$inc': {
                         'dna': -10,
@@ -182,7 +181,6 @@ class MutationGame:
                 'message': f'⬆ {creature["name"]} evolved to level {new_level}!'
             }
         else:
-            # Failed evolution
             await db.update_one(
                 'mutations',
                 {'user_id': user_id},
