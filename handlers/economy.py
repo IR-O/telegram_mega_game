@@ -2,38 +2,34 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from services.economy import EconomyService
 from database.mongodb import db
+from locales.translations import get_translation
 import random
 import logging
-from datetime import datetime
-import re
+from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
 class EconomyHandler:
     @staticmethod
-    def escape_markdown(text: str) -> str:
-        """Escape special characters for Markdown"""
-        special_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
-        for char in special_chars:
-            text = text.replace(char, f'\\{char}')
-        return text
-
-    @staticmethod
     async def balance_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /balance command"""
         user = update.effective_user
         
+        # Get user's language
+        user_data = await db.find_one('users', {'telegram_id': user.id})
+        lang = user_data.get('language', 'en') if user_data else 'en'
+        
         balance = await EconomyService.get_balance(user.id)
         
         balance_text = f"""
-💰 **Your Balance**
+💰 **{get_translation('balance', lang)}**
 ━━━━━━━━━━━━━━━━━━━━━
 
-**Coins:** {balance['coins']}
-**Gems:** {balance['gems']}
-**Bank:** {balance['bank']}
+**{get_translation('balance_coins', lang)}:** {balance['coins']}
+**{get_translation('balance_gems', lang)}:** {balance['gems']}
+**{get_translation('balance_bank', lang)}:** {balance['bank']}
 
-**Total Worth:** {balance['coins'] + balance['bank']} coins
+**{get_translation('balance_total_worth', lang)}:** {balance['coins'] + balance['bank']} coins
         """
         
         keyboard = [
@@ -78,16 +74,19 @@ class EconomyHandler:
         """Handle /daily command"""
         user = update.effective_user
         
+        user_data = await db.find_one('users', {'telegram_id': user.id})
+        lang = user_data.get('language', 'en') if user_data else 'en'
+        
         result = await EconomyService.claim_daily(user.id)
         
         if result['claimed']:
             message = f"""
-🎁 **Daily Reward Claimed!**
+🎁 **{get_translation('daily_reward', lang)}**
 ━━━━━━━━━━━━━━━━━━━━━
 
-**Coins:** +{result['coins']}
-**Gems:** +{result['gems']}
-**Streak:** {result['streak']} days
+**{get_translation('balance_coins', lang)}:** +{result['coins']}
+**{get_translation('balance_gems', lang)}:** +{result['gems']}
+**{get_translation('daily_streak', lang, streak=result['streak'])}**
 
 {result['message']}
             """
@@ -110,13 +109,16 @@ class EconomyHandler:
         """Handle /work command"""
         user = update.effective_user
         
+        user_data = await db.find_one('users', {'telegram_id': user.id})
+        lang = user_data.get('language', 'en') if user_data else 'en'
+        
         cooldown = await db.find_one('cooldowns', {'user_id': user.id, 'type': 'work'})
         
         if cooldown and cooldown.get('expires_at', datetime.utcnow()) > datetime.utcnow():
             remaining = (cooldown['expires_at'] - datetime.utcnow()).seconds
             minutes = remaining // 60
             seconds = remaining % 60
-            msg = f"⏰ Please wait {minutes}m {seconds}s before working again."
+            msg = get_translation('work_cooldown', lang, minutes=minutes, seconds=seconds)
             if update.message:
                 await update.message.reply_text(msg)
             return
@@ -137,7 +139,6 @@ class EconomyHandler:
         success = await EconomyService.add_coins(user.id, earned, f'Worked as {job["name"]}')
         
         if success:
-            from datetime import timedelta
             await db.update_one(
                 'cooldowns',
                 {'user_id': user.id, 'type': 'work'},
@@ -149,13 +150,16 @@ class EconomyHandler:
             if random.random() < 0.1:
                 bonus = random.randint(10, 50)
                 await EconomyService.add_coins(user.id, bonus, 'Work bonus event')
-                event_message = f"\n🎉 Bonus event! +{bonus} extra coins!"
+                event_message = get_translation('work_event_bonus', lang, bonus=bonus)
             elif random.random() < 0.05:
                 penalty = random.randint(10, 30)
                 await EconomyService.remove_coins(user.id, penalty, 'Work penalty event')
-                event_message = f"\n⚠️ Bad luck! -{penalty} coins stolen!"
+                event_message = get_translation('work_event_penalty', lang, penalty=penalty)
             
-            msg = f"💼 You worked as a **{job['name']}**\nEarned: +{earned} coins{event_message}\n⏰ Next work available in 5 minutes"
+            msg = f"💼 {get_translation('work_job', lang, job=job['name'])}\n"
+            msg += f"{get_translation('work_earned', lang, earned=earned)}{event_message}\n"
+            msg += f"⏰ {get_translation('work_next', lang, time='5 minutes')}"
+            
             if update.message:
                 try:
                     await update.message.reply_text(msg, parse_mode='Markdown')
@@ -169,6 +173,10 @@ class EconomyHandler:
     async def bank_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /bank command"""
         user = update.effective_user
+        
+        user_data = await db.find_one('users', {'telegram_id': user.id})
+        lang = user_data.get('language', 'en') if user_data else 'en'
+        
         economy = await db.find_one('economy', {'user_id': user.id})
         
         if not economy:
@@ -177,12 +185,12 @@ class EconomyHandler:
             return
         
         bank_text = f"""
-🏦 **Bank of Mega Game**
+🏦 **{get_translation('bank', lang)}**
 ━━━━━━━━━━━━━━━━━━━━━
 
-**Current Balance:** {economy.get('bank', 0)} coins
-**Interest Rate:** 2% daily
-**Protection:** Active
+**{get_translation('bank_balance', lang)}:** {economy.get('bank', 0)} coins
+**{get_translation('bank_interest', lang)}**
+**{get_translation('bank_protection', lang)}**
 
 **Features:**
 • 2% daily interest on savings
@@ -234,10 +242,14 @@ class EconomyHandler:
         if not user or not query.message:
             return
         
+        # Get user's language
+        user_data = await db.find_one('users', {'telegram_id': user.id})
+        lang = user_data.get('language', 'en') if user_data else 'en'
+        
         data = query.data
         
         if data == "bank_deposit":
-            text = "💰 **Deposit**\n\nSend the amount you want to deposit.\nExample: `/deposit 1000`"
+            text = f"💰 **{get_translation('bank_deposit', lang)}**\n\nSend the amount you want to deposit.\nExample: `/deposit 1000`"
             keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Bank", callback_data="bank")]])
             try:
                 await query.edit_message_text(text, parse_mode='Markdown', reply_markup=keyboard)
@@ -245,7 +257,7 @@ class EconomyHandler:
                 await query.edit_message_text(text, reply_markup=keyboard)
         
         elif data == "bank_withdraw":
-            text = "💳 **Withdraw**\n\nSend the amount you want to withdraw.\nExample: `/withdraw 500`"
+            text = f"💳 **{get_translation('bank_withdraw', lang)}**\n\nSend the amount you want to withdraw.\nExample: `/withdraw 500`"
             keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Bank", callback_data="bank")]])
             try:
                 await query.edit_message_text(text, parse_mode='Markdown', reply_markup=keyboard)
@@ -255,13 +267,13 @@ class EconomyHandler:
         elif data == "bank_stats":
             economy = await db.find_one('economy', {'user_id': user.id})
             text = f"""
-📊 **Bank Statistics**
+📊 **{get_translation('bank_stats', lang)}**
 ━━━━━━━━━━━━━━━━━━━━━
 
-**Current Balance:** {economy.get('bank', 0)}
-**Total Deposited:** {economy.get('total_deposited', 0)}
-**Total Withdrawn:** {economy.get('total_withdrawn', 0)}
-**Interest Earned:** {economy.get('interest_earned', 0)}
+**{get_translation('bank_balance', lang)}:** {economy.get('bank', 0)}
+**{get_translation('bank_total_deposited', lang)}:** {economy.get('total_deposited', 0)}
+**{get_translation('bank_total_withdrawn', lang)}:** {economy.get('total_withdrawn', 0)}
+**{get_translation('bank_interest_earned', lang)}:** {economy.get('interest_earned', 0)}
             """
             keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Bank", callback_data="bank")]])
             try:
@@ -270,7 +282,7 @@ class EconomyHandler:
                 await query.edit_message_text(text, reply_markup=keyboard)
         
         elif data == "bank_interest":
-            text = """
+            text = f"""
 📈 **Interest History**
 ━━━━━━━━━━━━━━━━━━━━━
 
@@ -287,16 +299,16 @@ Interest is added automatically every 24 hours.
                 await query.edit_message_text(text, reply_markup=keyboard)
         
         elif data == "bank_info":
-            text = """
-🏦 **Bank Information**
+            text = f"""
+🏦 **{get_translation('bank_info', lang)}**
 ━━━━━━━━━━━━━━━━━━━━━
 
-**Interest Rate:** 2% daily
+**{get_translation('bank_interest', lang)}:** 2% daily
 **Protection:** 50% of bank is protected from robbery
 **Withdrawal Fee:** None
 **Deposit Fee:** None
-**Minimum Deposit:** 10 coins
-**Minimum Withdrawal:** 10 coins
+**{get_translation('bank_min_deposit', lang)}**
+**{get_translation('bank_min_withdraw', lang)}**
 
 **Benefits:**
 • Safe storage for your coins
