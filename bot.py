@@ -54,13 +54,13 @@ class MegaGameBot:
             await db.connect()
             logger.info("MongoDB connected")
             
-            # Create application with simpler approach
+            # Create application
             self.application = Application.builder().token(Config.BOT_TOKEN).build()
             
             # Register handlers
             self.register_handlers()
             
-            # Setup signal handlers for graceful shutdown
+            # Setup signal handlers
             signal.signal(signal.SIGINT, self.signal_handler)
             signal.signal(signal.SIGTERM, self.signal_handler)
             
@@ -124,7 +124,7 @@ class MegaGameBot:
         app.add_handler(CallbackQueryHandler(trading_handler.handle_callback))
         app.add_handler(CallbackQueryHandler(missions_handler.handle_callback))
         
-        # Message handlers (for group chats)
+        # Message handlers
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_group_message))
         
         # Error handler
@@ -137,14 +137,12 @@ class MegaGameBot:
             if not user:
                 return
             
-            # Update last activity
             await db.update_one(
                 'users',
                 {'telegram_id': user.id},
                 {'$set': {'last_active': datetime.datetime.utcnow()}}
             )
             
-            # Random reward for activity (1% chance)
             if random.random() < 0.01:
                 from services.economy import EconomyService
                 await EconomyService.add_coins(
@@ -156,7 +154,6 @@ class MegaGameBot:
     async def error_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle errors gracefully"""
         logger.error(f"Update {update} caused error {context.error}")
-        
         try:
             if update and update.effective_message:
                 await update.effective_message.reply_text(
@@ -169,26 +166,19 @@ class MegaGameBot:
         """Run background tasks"""
         while self.is_running and not self.shutdown_event.is_set():
             try:
-                # Check and spawn events
                 await self.event_service.check_and_spawn_events()
                 
-                # Check achievements for all users (run less frequently)
-                if random.random() < 0.1:  # 10% chance each minute
+                if random.random() < 0.1:
                     await self.achievement_service.check_achievements()
                 
-                # Clean expired cooldowns
                 await db.delete_many(
                     'cooldowns',
                     {'expires_at': {'$lt': datetime.datetime.utcnow()}}
                 )
                 
-                # Process notifications
                 await self.notification_service.process_notifications()
-                
-                # Update group worlds
                 await self.update_group_worlds()
                 
-                # Wait with check for shutdown
                 for _ in range(60):
                     if self.shutdown_event.is_set():
                         break
@@ -202,7 +192,7 @@ class MegaGameBot:
                 await asyncio.sleep(60)
     
     async def update_group_worlds(self):
-        """Update group world statistics"""
+        """Update group world statistics with safe handling"""
         try:
             # Get all group worlds
             groups = await db.find('group_worlds', {})
@@ -212,19 +202,16 @@ class MegaGameBot:
             
             for group in groups:
                 try:
-                    # Skip if group is None or not a dict
                     if not group or not isinstance(group, dict):
                         continue
                     
-                    # Get group_id safely
                     group_id = group.get('group_id')
                     if not group_id:
                         continue
                     
-                    # Get last_active safely
+                    # Safely handle last_active
                     last_active = group.get('last_active')
                     if not last_active:
-                        # If no last_active, set it to now
                         await db.update_one(
                             'group_worlds',
                             {'group_id': group_id},
@@ -232,7 +219,7 @@ class MegaGameBot:
                         )
                         continue
                     
-                    # Ensure last_active is a datetime object
+                    # Convert to datetime if needed
                     if isinstance(last_active, str):
                         try:
                             last_active = datetime.datetime.fromisoformat(last_active)
@@ -241,21 +228,18 @@ class MegaGameBot:
                     elif not isinstance(last_active, datetime.datetime):
                         last_active = datetime.datetime.utcnow()
                     
-                    # Calculate hours since last activity
                     hours_since = (datetime.datetime.utcnow() - last_active).total_seconds() / 3600
                     
                     if hours_since > 24:
-                        # Increase threat level based on inactivity
                         threat_increase = min(10, hours_since / 24)
                         
-                        # Get current threat level safely
+                        # Safely get current threat level
                         current_threat = group.get('threat_level', 0)
                         
-                        # Ensure current_threat is a number
+                        # Ensure it's a number, not a dict or other type
                         if not isinstance(current_threat, (int, float)):
                             current_threat = 0
                         
-                        # Update threat level
                         await db.update_one(
                             'group_worlds',
                             {'group_id': group_id},
@@ -278,24 +262,18 @@ class MegaGameBot:
         try:
             await self.initialize()
             
-            # Start background tasks
             task = asyncio.create_task(self.run_background_tasks())
             self.background_tasks.append(task)
             
-            # Start bot with polling
             logger.info("Starting bot polling...")
             
-            # Initialize and start the application
             await self.application.initialize()
             await self.application.start()
-            
-            # Use the correct polling method
             await self.application.updater.start_polling(
                 allowed_updates=Update.ALL_TYPES,
                 drop_pending_updates=True
             )
             
-            # Keep the bot running until shutdown signal
             while self.is_running and not self.shutdown_event.is_set():
                 await asyncio.sleep(1)
                 
@@ -313,41 +291,31 @@ class MegaGameBot:
         """Shutdown the bot gracefully"""
         logger.info("Starting graceful shutdown...")
         
-        # Set shutdown event
         self.is_running = False
         self.shutdown_event.set()
         
-        # Cancel background tasks with timeout
         if self.background_tasks:
             for task in self.background_tasks:
                 if not task.done():
                     task.cancel()
                     try:
                         await asyncio.wait_for(task, timeout=5.0)
-                    except asyncio.TimeoutError:
-                        logger.warning("Background task timeout during shutdown")
-                    except asyncio.CancelledError:
+                    except:
                         pass
         
-        # Shutdown application with timeout
         if self.application:
             try:
                 if hasattr(self.application, 'updater') and self.application.updater:
                     await asyncio.wait_for(self.application.updater.stop(), timeout=5.0)
                 await asyncio.wait_for(self.application.stop(), timeout=5.0)
                 await asyncio.wait_for(self.application.shutdown(), timeout=5.0)
-            except asyncio.TimeoutError:
-                logger.warning("Application shutdown timeout")
-            except Exception as e:
-                logger.error(f"Error during application shutdown: {e}")
+            except:
+                pass
         
-        # Close database connection
         try:
             await asyncio.wait_for(db.close(), timeout=5.0)
-        except asyncio.TimeoutError:
-            logger.warning("Database shutdown timeout")
-        except Exception as e:
-            logger.error(f"Error during database shutdown: {e}")
+        except:
+            pass
         
         logger.info("Bot shutdown complete")
 
@@ -364,10 +332,8 @@ async def main():
         await bot.shutdown()
         raise
     finally:
-        # Force exit if needed
         logger.info("Exiting...")
         sys.exit(0)
 
 if __name__ == "__main__":
-    # Run the bot
     asyncio.run(main())
