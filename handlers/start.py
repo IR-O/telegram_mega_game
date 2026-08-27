@@ -3,7 +3,7 @@ from telegram.ext import ContextTypes, CommandHandler, CallbackQueryHandler
 from database.mongodb import db
 from services.economy import EconomyService
 from keyboards.menus import get_main_menu
-from locales.translations import get_translation
+from locales.translations import get_translation, SUPPORTED_LANGUAGES
 from datetime import datetime, timedelta
 import logging
 import random
@@ -15,14 +15,13 @@ class StartHandler:
     async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /start command"""
         user = update.effective_user
-        chat = update.effective_chat
         
         # Get or create user
         user_data = await db.find_one('users', {'telegram_id': user.id})
         
         if not user_data:
-            # Create new user with language from Telegram
-            user_lang = user.language_code if user.language_code in ['en', 'hi', 'bn', 'ta', 'te', 'mr', 'gu', 'pa', 'kn', 'ml', 'ur', 'ne', 'id', 'es', 'fr', 'de', 'ru', 'tr', 'pt', 'ar', 'ja', 'ko', 'zh'] else 'en'
+            # Get user's language from Telegram
+            user_lang = user.language_code if user.language_code in SUPPORTED_LANGUAGES else 'en'
             
             user_data = {
                 'telegram_id': user.id,
@@ -61,7 +60,7 @@ class StartHandler:
             # Initialize economy
             await EconomyService.initialize_user(user.id)
             
-            # Send welcome message in user's language
+            # Get welcome message in user's language
             welcome_text = get_translation('welcome', user_lang, name=user.first_name) + "\n\n"
             welcome_text += "I am your ultimate gaming hub with 13 exciting games!\n"
             welcome_text += "Use /games to explore all available games.\n"
@@ -83,7 +82,7 @@ class StartHandler:
                 {'$set': {'last_active': datetime.utcnow()}}
             )
             
-            # Send welcome back message
+            # Get welcome back message in user's language
             welcome_text = get_translation('welcome_back', user_lang, name=user.first_name)
             await update.message.reply_text(
                 welcome_text,
